@@ -1,0 +1,22 @@
+# --- Core (จำเป็น, ติดตั้งให้ครบก่อน) ---
+openai>=1.40           # คุยกับ LM Studio ผ่าน OpenAI-compatible API
+pyyaml>=6.0
+python-dotenv>=1.0
+rich>=13.7             # UI ในเทอร์มินัล
+httpx>=0.27            # ใช้ใน setup_check เช็ก LM Studio
+
+# --- เสียง / อวตาร ---
+numpy>=1.26
+soundfile>=0.12
+sounddevice>=0.4.6
+websockets>=12.0       # VTube Studio plugin API
+
+# --- TTS เอนจินสำรอง: MMS-TTS ไทย (รับประกันว่ารันได้บน CPU) ---
+huggingface_hub>=0.24
+transformers>=4.44
+torch>=2.2             # บน Windows = CPU build อัตโนมัติ
+pythainlp>=5.0         # แบ่งประโยคภาษาไทย
+
+# --- TTS เอนจินหลัก: F5-TTS-THAI ---
+# ติดตั้งแยกด้วย:  pip install -r requirements-f5.txt
+# (แยกไว้เพราะ dependency หนักและบางทีชนกัน — แอปทำงานได้ด้วย MMS ก่อน)

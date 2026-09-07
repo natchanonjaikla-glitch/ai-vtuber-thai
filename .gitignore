@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Project runtime
+.cache/
+.vts_token
+logs/
+*.log
+workspace/*
+!workspace/.gitkeep
+
+# Voice reference (user-provided, can be large)
+assets/voice_ref/*.wav
+assets/voice_ref/*.mp3
+
+# Models cache
+models/
+.hf_home/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

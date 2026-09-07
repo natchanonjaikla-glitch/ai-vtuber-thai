@@ -1,0 +1,77 @@
+# ============================================================
+#  AI VTuber — ไฟล์ตั้งค่าหลัก
+#  ค่าใน .env จะ override ค่าในไฟล์นี้ (ดู src/config.py)
+# ============================================================
+
+llm:
+  # LM Studio local server (OpenAI-compatible)
+  base_url: "http://localhost:1234/v1"
+  api_key: "lm-studio"            # LM Studio ไม่ตรวจ key แต่ SDK ต้องมีค่า
+  # ชื่อโมเดลตามที่โหลดไว้ใน LM Studio (ดูจากแท็บ Developer / My Models)
+  model: "scb10x/llama3.1-typhoon2-8b-instruct"
+  temperature: 0.7
+  max_tokens: 512
+  timeout_sec: 120
+  # จำนวนคู่สนทนาที่เก็บเป็น context (นับเป็น "รอบ" user+assistant)
+  history_turns: 8
+
+persona:
+  name: "ไอริส"
+  language: "th"
+  # บุคลิก/สไตล์ — จะถูกใส่ใน system prompt
+  style: >
+    เป็น VTuber สาวสดใส เป็นกันเอง พูดภาษาไทยธรรมชาติเหมือนคุยกับเพื่อน
+    ตอบสั้นกระชับ 1–3 ประโยค เพราะคำตอบจะถูกอ่านออกเสียง
+    ไม่ใช้ bullet point ไม่ใช้ markdown ไม่ใส่อิโมจิเยอะ
+    ลงท้ายด้วย "ค่ะ/นะคะ" อย่างเป็นธรรมชาติ
+  # ให้โมเดลปล่อยมาร์กเกอร์นี้เองเมื่อเจองานเขียนโค้ดที่ยากเกินกำลัง
+  delegate_marker: "[[DELEGATE_TO_CLAUDE: <อธิบายงานให้ละเอียด> ]]"
+
+tts:
+  engine: "mms"                   # "mms" (เร็ว, เสียงเดียว) หรือ "f5" (โคลนเสียง, ช้ากว่า)
+  cpu_threads: 8                  # Ryzen 5 5600 = 12 threads, เผื่อ 8 ให้ TTS
+  cache_dir: ".cache/tts"
+  max_chars_per_chunk: 180        # ตัดประโยคยาวไม่ให้เกินนี้ต่อ 1 ครั้งสังเคราะห์
+
+  mms:
+    model_id: "facebook/mms-tts-tha"
+
+  f5:
+    hf_repo: "VIZINTZOR/F5-TTS-THAI"
+    model_name: "F5TTS_v1_Base"
+    ckpt_file: "model_1000000.pt"     # ชื่อไฟล์ ckpt ใน repo (ปรับตามที่มีจริง)
+    vocab_file: "vocab.txt"
+    ref_wav: "assets/voice_ref/ref.wav"
+    ref_text: "assets/voice_ref/ref.txt"   # ไฟล์ .txt หรือใส่ข้อความตรง ๆ ก็ได้
+    nfe_step: 16                          # ยิ่งน้อยยิ่งเร็ว (16 = เร็ว, 32 = คุณภาพดีขึ้น)
+    speed: 1.0
+    remove_silence: true
+
+avatar:
+  enabled: true
+  vts_url: "ws://localhost:8001"
+  plugin_name: "AI VTuber Brain"
+  plugin_developer: "Natchanon"
+  token_file: ".vts_token"
+  mouth_param: "MouthOpen"       # พารามิเตอร์อินพุตมาตรฐานของ VTS
+  fps: 30                        # อัตราการส่งค่าปาก (30 พอ, ปลอดภัยกับ rate limit ของ VTS)
+  gain: 1.6                      # ขยายความแรงการอ้าปาก
+  noise_gate: 0.14              # ต่ำกว่านี้ = เงียบ ปากปิดสนิท (เพิ่มค่า = หุบปากบ่อยขึ้น)
+  smoothing_attack: 0.6          # 0–1 ยิ่งมากยิ่งตอบไว (ตอนเสียงดังขึ้น)
+  smoothing_release: 0.25        # 0–1 ยิ่งน้อยยิ่งค้างนาน (ตอนเสียงเบาลง)
+
+coding:
+  # โฟลเดอร์เริ่มต้นที่ Claude Code จะเข้าไปทำงาน (เปลี่ยนได้ด้วย /project <path>)
+  default_project: "./workspace"
+  timeout_sec: 900
+  # acceptEdits = แก้ไฟล์ให้อัตโนมัติ | bypassPermissions = ทำได้ทุกอย่างไม่ถาม (เสี่ยงกว่า)
+  permission_mode: "acceptEdits"
+  # ผู้ใช้พิมพ์คำเหล่านี้ = สั่งส่งงานให้ Claude Code ทันที (ทางลัด ไม่ต้องพึ่งโมเดล)
+  trigger_phrases:
+    - "เรียก claude"
+    - "เรียก claude code"
+    - "ให้ claude"
+    - "สั่ง claude"
+    - "งานยาก"
+    - "ช่วยเขียนโค้ด"
+    - "/claude"

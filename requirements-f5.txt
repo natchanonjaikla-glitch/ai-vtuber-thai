@@ -1,0 +1,5 @@
+# TTS เอนจินหลัก: F5-TTS-THAI (โคลนเสียงภาษาไทย, offline, รันบน CPU)
+# ติดตั้งหลังจากติดตั้ง requirements.txt สำเร็จแล้ว:
+#     pip install -r requirements-f5.txt
+# ถ้าติดตั้งไม่ผ่าน / ชน dependency กับ torch ให้ข้ามไปก่อน แอปจะใช้ MMS-TTS แทน
+f5-tts>=1.1
