@@ -46,14 +46,11 @@ class MMSConfig:
 @dataclass
 class F5Config:
     hf_repo: str = "VIZINTZOR/F5-TTS-THAI"
-    model_name: str = "F5TTS_v1_Base"
-    ckpt_file: str = "model_1000000.pt"
-    vocab_file: str = "vocab.txt"
+    model_name: str = "v1"          # f5-tts-th: "v1" = โมเดล 1,000,000 steps
     ref_wav: str = "assets/voice_ref/ref.wav"
     ref_text: str = "assets/voice_ref/ref.txt"
-    nfe_step: int = 16
+    nfe_step: int = 16             # ยิ่งน้อยยิ่งเร็ว (แต่บน CPU ก็ยังช้ามาก ~6 นาที/ประโยค)
     speed: float = 1.0
-    remove_silence: bool = True
 
 
 @dataclass

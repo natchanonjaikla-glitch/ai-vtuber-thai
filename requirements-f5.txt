@@ -1,5 +1,13 @@
-# TTS เอนจินหลัก: F5-TTS-THAI (โคลนเสียงภาษาไทย, offline, รันบน CPU)
-# ติดตั้งหลังจากติดตั้ง requirements.txt สำเร็จแล้ว:
-#     pip install -r requirements-f5.txt
-# ถ้าติดตั้งไม่ผ่าน / ชน dependency กับ torch ให้ข้ามไปก่อน แอปจะใช้ MMS-TTS แทน
-f5-tts>=1.1
+# ---------------------------------------------------------------------------
+# F5-TTS-THAI — โคลนเสียงภาษาไทย (ออปชัน, ติดตั้งหลัง requirements.txt)
+#
+# ⚠️ บนเครื่องนี้ (AMD GPU, ไม่มี CUDA บน Windows) F5 รันบน CPU และ "ช้ามาก"
+#    ~6 นาที ต่อ 1 ประโยค → ใช้ได้เฉพาะอัดเสียงล่วงหน้า ไม่เหมาะแชทสด
+#    แชทสดใช้ engine 'mms' (อยู่ใน requirements.txt แล้ว)
+#
+# ลำดับติดตั้ง (สำคัญ — ต้อง pin torch/torchaudio ให้ตรงกัน ไม่งั้น torchaudio พัง):
+#   pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-f5.txt
+#   pip uninstall -y torchcodec      # ถ้ามันถูกลากมา — torchaudio 2.8 ใช้ backend soundfile ไม่ต้องใช้ torchcodec
+# ---------------------------------------------------------------------------
+f5-tts-th==1.0.9
