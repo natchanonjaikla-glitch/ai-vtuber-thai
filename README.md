@@ -26,46 +26,45 @@ VTuber ที่ขับเคลื่อนด้วย LLM ที่รั�
 
 ## ติดตั้งครั้งแรก
 
-### 1) Python env + แพ็กเกจหลัก
+> **สถานะเครื่องนี้:** `.venv` + แพ็กเกจหลัก + F5-TTS-THAI + ffmpeg 9.0.1 + Claude Code CLI
+> + แอป LM Studio — **ติดตั้งแล้ว** เหลือแค่ข้อ 2 (เปิด LM Studio ตั้งค่า) กับข้อ 3 (VTube Studio)
+
+### 1) Python env + แพ็กเกจหลัก  ✅ ติดตั้งแล้ว
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+# ถ้าจะลงเครื่องใหม่ให้เป๊ะเหมือนเดิม:  pip install -r requirements-lock.txt
 ```
 
-### 2) LM Studio (สมองของ VTuber)
-1. โหลด + ติดตั้งจาก <https://lmstudio.ai>
-2. Settings → Runtime → เลือก **Vulkan** (ต้องเห็น "Radeon RX 6700 XT")
+### 2) LM Studio (สมองของ VTuber)  — ⬅️ แอปลงแล้ว เหลือตั้งค่า
+1. เปิดแอป **LM Studio** (ลงไว้ที่ `%LOCALAPPDATA%\Programs\LM Studio`) ครั้งแรกกดผ่าน onboarding
+2. Settings → เลือก runtime **Vulkan** (ต้องเห็น "Radeon RX 6700 XT")
 3. ค้น + ดาวน์โหลดโมเดล GGUF (เลือกอย่างใดอย่างหนึ่ง):
    - `scb10x/llama3.1-typhoon2-8b-instruct` — **ภาษาไทยดีที่สุด** (Q4_K_M ~5 GB)
    - `bartowski/Qwen2.5-7B-Instruct-GGUF` — สำรอง
 4. แท็บ **Developer** → **Start Server** (พอร์ต 1234) → โหลดโมเดลที่ดาวน์โหลดไว้
 5. เอาชื่อโมเดล (ตามที่ LM Studio แสดง) ไปใส่ `config.yaml` → `llm.model`
 
-### 3) VTube Studio (อวตาร)
-1. ติดตั้งจาก Steam (ฟรี)
+### 3) VTube Studio (อวตาร)  — ❗ ต้องลงเอง (เป็นเกมใน Steam)
+1. ติดตั้งจาก Steam (ฟรี) — ไม่มีทางลงผ่าน CLI
 2. Settings (ไอคอนเฟือง) → เลื่อนหา **Start API** → เปิด (พอร์ต 8001)
 3. โหลดโมเดล Live2D — ใช้โมเดลตัวอย่างที่ให้มาก็ได้ (เช่น "Akari") ที่มีพารามิเตอร์ปากมาตรฐาน
 4. ครั้งแรกที่รันแอปนี้ จะมี popup ใน VTube Studio → กด **Allow** (token ถูกเก็บไว้ที่ `.vts_token`)
 
-### 4) ffmpeg (จำเป็นสำหรับ F5-TTS / จัดการเสียงบางเส้นทาง)
-```powershell
-winget install Gyan.FFmpeg
-```
-เปิด PowerShell ใหม่ให้ PATH อัปเดต
+### 4) ffmpeg  ✅ ติดตั้งแล้ว (9.0.1 — เปิดเทอร์มินัลใหม่ให้ PATH อัปเดต)
 
-### 5) Claude Code CLI (ตัวช่วยงานโค้ดยาก)
+### 5) Claude Code CLI  ✅ ติดตั้งแล้ว (2.1.263) — เหลือแค่ login
 ```powershell
-npm i -g @anthropic-ai/claude-code
-claude            # ครั้งแรกให้ทำตามขั้นตอน login (subscription หรือ API key)
+claude            # รันครั้งเดียวเพื่อ login (subscription หรือ API key)
 ```
 
-### 6) เสียงตัวละคร (ถ้าจะใช้ F5-TTS-THAI — เสียงดีกว่า MMS มาก)
-```powershell
-pip install -r requirements-f5.txt
-```
-แล้ววางไฟล์:
-- `assets/voice_ref/ref.wav` — เสียงพูดไทยชัด ~8–12 วิ (mono, 24 kHz)
+### 6) เสียงตัวละคร F5-TTS-THAI  ✅ แพ็กเกจติดตั้งแล้ว
+> ⚠️ **บนเครื่องนี้ (AMD GPU, ไม่มี CUDA) F5 ช้ามาก ~6 นาที/ประโยค** — เหมาะกับอัดเสียง
+> ล่วงหน้าเท่านั้น ไม่เหมาะแชทสด · แชทสดใช้ `mms` (เร็ว เสียงเดียว)
+
+ถ้าจะใช้เสียงตัวเอง วางไฟล์ (ไม่ใส่ก็ได้ — จะใช้เสียงตัวอย่างจาก repo อัตโนมัติ):
+- `assets/voice_ref/ref.wav` — เสียงพูดไทยชัด 2–8 วิ (mono, 24 kHz)
 - `assets/voice_ref/ref.txt` — ข้อความที่พูดในไฟล์นั้นแบบเป๊ะ ๆ
 
 (ดู `assets/voice_ref/README.md`)
@@ -109,9 +108,10 @@ python run.py
 | | MMS-TTS (`mms`) | F5-TTS-THAI (`f5`) |
 |---|---|---|
 | คุณภาพ | พอฟังรู้เรื่อง หุ่นยนต์นิด ๆ | ธรรมชาติ โคลนเสียงจาก `ref.wav` ได้ |
-| ความเร็ว (CPU) | เร็ว (~0.4× realtime) | ช้า (~5–12 วิ/ประโยค, ปรับ `nfe_step` ลดได้) |
-| ติดตั้ง | มากับ `requirements.txt` | `requirements-f5.txt` แยก |
-| ใช้เมื่อ | ทดสอบ / ตอบไว | เสียงจริงของตัวละคร |
+| ความเร็ว (CPU เครื่องนี้) | **~0.4× realtime** (ประโยคละ 2–3 วิ) | **~6 นาที/ประโยค** (RTF ~83, ไม่มี CUDA) |
+| ใช้แชทสดได้ไหม | ได้ | **ไม่ได้** — อัดเสียงล่วงหน้าเท่านั้น |
+| ติดตั้ง | มากับ `requirements.txt` | `f5-tts-th` (ติดตั้งแล้ว) |
+| ใช้เมื่อ | ค่าเริ่มต้น / คุยโต้ตอบ | อยากได้เสียงเฉพาะตัว แล้วอัดเก็บไว้ |
 
 > **หมายเหตุ:** Coqui XTTS-v2 **ไม่รองรับภาษาไทย** จึงเลือกใช้ F5-TTS-THAI + MMS แทน
 
