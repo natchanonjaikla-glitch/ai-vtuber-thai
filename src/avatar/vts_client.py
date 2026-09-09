@@ -102,6 +102,22 @@ class VTSClient:
             self.last_error = f"{type(e).__name__}: {e}"
             self.connected = False
 
+    async def input_parameters(self) -> list[dict]:
+        """รายชื่อพารามิเตอร์อินพุตที่ VTS ฉีดค่าได้ (ใช้เช็กว่า mouth_param ถูกไหม)."""
+        if not self.connected:
+            return []
+        resp = await self._rpc("InputParameterListRequest")
+        return resp.get("data", {}).get("defaultParameters", []) + resp.get("data", {}).get(
+            "customParameters", []
+        )
+
+    async def current_model(self) -> dict:
+        """ข้อมูลโมเดล Live2D ที่โหลดอยู่ตอนนี้."""
+        if not self.connected:
+            return {}
+        resp = await self._rpc("CurrentModelRequest")
+        return resp.get("data", {})
+
     async def close(self) -> None:
         if self._ws is not None:
             try:
