@@ -14,6 +14,27 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
 
+_NUMERIC_RE = re.compile(r"\d[\d,]*\.?\d*")
+
+
+def _usefulness(page: str, query: str) -> float:
+    """ให้คะแนนว่าหน้านี้น่าจะมี "ข้อมูลจริง" แค่ไหน (ไม่ใช่แค่เมนู/สารบัญ).
+
+    หน้าที่เป็นเมนูล้วนจะมีคำเยอะแต่แทบไม่มีตัวเลข ส่วนหน้าที่มีราคา/สถิติจริง
+    จะมีตัวเลขหนาแน่นและมีคำจากคำค้นปรากฏอยู่
+    """
+    if not page or len(page) < 120:
+        return 0.0
+    numbers = _NUMERIC_RE.findall(page)
+    # ตัวเลขที่ "มีความหมาย" (ไม่ใช่เลขตัวเดียวจากเมนู)
+    meaty = [x for x in numbers if len(x.replace(",", "").replace(".", "")) >= 3]
+    density = len(meaty) / (len(page) / 1000.0)      # ตัวเลขต่อ 1000 ตัวอักษร
+    terms = [t for t in query.split() if len(t) > 2]
+    hits = sum(page.count(t) for t in terms)
+    score = density * 2.0 + min(hits, 10) * 0.5
+    return score if meaty else 0.0
+
+
 @dataclass
 class SearchResult:
     title: str
@@ -58,7 +79,11 @@ class WebSearch:
 
     # ------------------------------------------------------------------ #
     def fetch_page(self, url: str) -> str:
-        """ดึงเนื้อความจากหน้าเว็บ (ตัดแท็ก script/style ออก)."""
+        """ดึงเนื้อความ **ทั้งหน้า** (ตัด script/style/เมนู ออก) ไม่ตัดความยาว.
+
+        การคัดให้พอดี context ไปทำทีหลังใน condense_for_query() ซึ่งเลือกจาก
+        "ส่วนที่เกี่ยวกับคำถาม" แทนการตัดหัวท้ายมั่ว ๆ
+        """
         import httpx
         from lxml import html as lxml_html
 
@@ -71,12 +96,59 @@ class WebSearch:
             )
             r.raise_for_status()
             doc = lxml_html.fromstring(r.text)
-            for bad in doc.xpath("//script|//style|//nav|//footer|//header|//noscript"):
-                bad.getparent().remove(bad)
+            for bad in doc.xpath(
+                "//script|//style|//nav|//footer|//header|//noscript|//aside|//form"
+            ):
+                parent = bad.getparent()
+                if parent is not None:
+                    parent.remove(bad)
             text = doc.text_content()
         except Exception:  # noqa: BLE001 - หน้าเว็บพังได้สารพัด ข้ามไปใช้ snippet แทน
             return ""
-        return _WS_RE.sub(" ", text).strip()[: self.cfg.fetch_chars]
+        return _WS_RE.sub(" ", text).strip()
+
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def condense_for_query(page: str, query: str, budget: int) -> str:
+        """อ่านทั้งหน้าแล้วคัดเฉพาะช่วงที่เกี่ยวกับคำถามให้ยาวไม่เกิน budget.
+
+        ตัดหน้าเป็นช่วง ๆ ให้คะแนนแต่ละช่วงจาก (คำจากคำค้น + ความหนาแน่นของตัวเลข)
+        แล้วหยิบช่วงที่คะแนนดีที่สุดมาเรียงตามลำดับเดิม — ดีกว่าตัดเอา N ตัวอักษรแรก
+        เพราะข้อมูลจริงมักอยู่กลางหน้า หลังเมนูยาว ๆ
+        """
+        page = page.strip()
+        if len(page) <= budget:
+            return page
+
+        seg_len = 500
+        segs = [page[i : i + seg_len] for i in range(0, len(page), seg_len)]
+        terms = [t for t in query.split() if len(t) > 2]
+
+        def score(seg: str) -> float:
+            nums = [x for x in _NUMERIC_RE.findall(seg)
+                    if len(x.replace(",", "").replace(".", "")) >= 3]
+            return len(nums) * 1.0 + sum(seg.count(t) for t in terms) * 2.0
+
+        ranked = sorted(range(len(segs)), key=lambda i: -score(segs[i]))
+        keep: set[int] = set()
+        total = 0
+        for i in ranked:
+            if total + len(segs[i]) > budget:
+                continue
+            keep.add(i)
+            total += len(segs[i])
+            if total >= budget * 0.95:
+                break
+        if not keep:
+            return page[:budget]
+        # เรียงกลับตามลำดับในหน้า ใส่ … ตรงที่ข้ามไป
+        out, prev = [], -1
+        for i in sorted(keep):
+            if prev >= 0 and i != prev + 1:
+                out.append(" … ")
+            out.append(segs[i])
+            prev = i
+        return "".join(out)
 
     # ------------------------------------------------------------------ #
     def context_for_llm(self, query: str) -> tuple[str, list[SearchResult]]:
@@ -90,7 +162,7 @@ class WebSearch:
         if not results:
             return "", []
 
-        blocks = [r.as_context() for r in results]
+        blocks: list[str] = []
 
         n = max(0, self.cfg.fetch_pages)
         if n:
@@ -100,10 +172,26 @@ class WebSearch:
             targets = results[:n]
             with ThreadPoolExecutor(max_workers=min(4, len(targets))) as pool:
                 pages = list(pool.map(lambda r: self.fetch_page(r.url), targets))
-            for r, page in zip(targets, pages):
-                if page:
-                    blocks.append(f"[เนื้อหาจากหน้าเว็บ {r.url}]\n{page}")
 
+            # บางหน้าที่ดึงมาเป็นเมนู/สารบัญล้วน ๆ ไม่มีข้อมูลจริง ถ้าปล่อยไว้ต้น ๆ
+            # โมเดลจะไปลอกหัวข้อมาตอบ → ให้คะแนนแล้วเรียงหน้าที่มีเนื้อขึ้นก่อน
+            scored = [
+                (_usefulness(page, query), r.url, page)
+                for r, page in zip(targets, pages)
+                if page
+            ]
+            scored.sort(key=lambda x: -x[0])
+            useful = [x for x in scored if x[0] > 0]
+            # แบ่งโควตาตัวอักษรให้หน้าที่คะแนนดีมากกว่า
+            for rank, (_score, url, page) in enumerate(useful):
+                budget = self.cfg.fetch_chars if rank == 0 else self.cfg.fetch_chars // 2
+                blocks.append(
+                    f"[เนื้อหาจากหน้าเว็บ {url}]\n"
+                    + self.condense_for_query(page, query, budget)
+                )
+
+        # snippet ไว้ท้ายสุด เป็นแค่ข้อมูลสำรอง
+        blocks.append("[สรุปย่อจากผลค้นหา]\n" + "\n".join(r.as_context() for r in results))
         return "\n\n".join(blocks), results
 
 
@@ -122,6 +210,11 @@ SEARCH_PROMPT = """\
    ความจำของคุณเป็นข้อมูลเก่าและผิดแน่นอน
 3. ถ้าข้อมูลข้างบนไม่มีคำตอบ ให้บอกตรง ๆ ว่า "หาข้อมูลที่ชัดเจนไม่เจอค่ะ"
    ห้ามเดาตัวเลขขึ้นมาเองเป็นอันขาด
-4. ตอบเป็นภาษาไทย 1–3 ประโยค ด้วยน้ำเสียงปกติของคุณ
-5. ห้ามอ่าน URL ออกเสียง และไม่ต้องขึ้นต้นว่า "จากผลการค้นหา"
+4. ถ้าตัวเลขขึ้นกับยี่ห้อ/ร้าน/ประเภท (เช่น ราคาน้ำมันของแต่ละปั๊ม
+   ราคาทองแบบแท่งกับรูปพรรณ ราคารับซื้อกับขายออก) ต้องบอกด้วยว่าเลขนั้นของอะไร
+   อย่าตอบเป็นตัวเลขลอย ๆ
+5. ถ้าแหล่งข้อมูลให้ตัวเลขไม่ตรงกัน ให้บอกว่าแต่ละแหล่งว่าอย่างไร
+   หรือเลือกใช้แหล่งแรกแล้วระบุว่ามาจากไหน
+6. ตอบเป็นภาษาไทย 1–3 ประโยค ด้วยน้ำเสียงปกติของคุณ
+7. ห้ามอ่าน URL ออกเสียง และไม่ต้องขึ้นต้นว่า "จากผลการค้นหา"
 """
