@@ -6,6 +6,8 @@ import asyncio
 from rich.console import Console
 from rich.panel import Panel
 
+from src.avatar.driver import AvatarDriver
+from src.avatar.expressions import EMOTIONS, guess_emotion
 from src.avatar.player import Player
 from src.avatar.vts_client import VTSClient
 from src.coding.claude_code import run_claude
@@ -19,6 +21,7 @@ from src.web.search import SEARCH_PROMPT, SearchError, WebSearch
 HELP = """[bold]คำสั่ง[/]
   /say <ข้อความ>     ให้พูดข้อความนี้ทันที (ทดสอบเสียง + ปาก)
   /voice [ชื่อ]        สลับเสียง (piper/edge/mms/f5) — ไม่ใส่ชื่อ = ดูรายการ
+  /emotion [ชื่อ]     เปลี่ยนสีหน้า (happy/sad/excited/...) — ไม่ใส่ = ดูรายการ
   /search <คำค้น>    ค้นข้อมูลจากเว็บแล้วสรุปให้ฟัง
   /web on|off        เปิด/ปิดการค้นเว็บ
   /project <path>    ตั้งโฟลเดอร์โปรเจกต์ให้ Claude Code
@@ -41,6 +44,7 @@ class VTuberApp:
         self.history: list[dict[str, str]] = []
         self.project = cfg.resolve(cfg.coding.default_project)
         self.vts: VTSClient | None = None
+        self.driver: AvatarDriver | None = None
         self.player: Player | None = None
 
     # ------------------------------------------------------------------ #
@@ -63,6 +67,19 @@ class VTuberApp:
             else:
                 c.print(f"[yellow]![/] ต่อ VTube Studio ไม่ได้ ({self.vts.last_error}) — จะทำงานแบบไม่มีอวตาร")
 
+        if self.cfg.avatar.expressions and self.vts is not None and self.vts.connected:
+            self.driver = AvatarDriver(
+                self.vts,
+                fps=self.cfg.avatar.fps,
+                blend=self.cfg.avatar.emotion_blend,
+                idle_amount=self.cfg.avatar.idle_amount,
+                blink_min_sec=self.cfg.avatar.blink_min_sec,
+                blink_max_sec=self.cfg.avatar.blink_max_sec,
+            )
+            self.driver.set_emotion(self.cfg.avatar.default_emotion)
+            await self.driver.start()
+            c.print(f"[green]✓[/] สีหน้า/ท่าทาง (เริ่มที่ '{self.cfg.avatar.default_emotion}')")
+
         self.player = Player(
             self.vts,
             fps=self.cfg.avatar.fps,
@@ -70,6 +87,8 @@ class VTuberApp:
             attack=self.cfg.avatar.smoothing_attack,
             release=self.cfg.avatar.smoothing_release,
             noise_gate=self.cfg.avatar.noise_gate,
+            driver=self.driver,
+            vowel_mouth=self.cfg.avatar.vowel_mouth,
         )
 
         if self.llm.ping():
@@ -78,10 +97,16 @@ class VTuberApp:
             c.print("[yellow]![/] ต่อ LM Studio ไม่ได้ — เปิด Start Server ใน LM Studio ก่อนเริ่มคุย")
 
     # ------------------------------------------------------------------ #
-    async def _speak(self, text: str) -> None:
+    def _apply_emotion(self, name: str) -> None:
+        if self.driver is not None and name:
+            self.driver.set_emotion(name)
+
+    async def _speak(self, text: str, emotion: str | None = None) -> None:
         text = (text or "").strip()
         if not text or self.player is None:
             return
+        if self.driver is not None:
+            self._apply_emotion(emotion or guess_emotion(text))
         try:
             wavs = await asyncio.to_thread(self.tts.synthesize, text)
             await self.player.speak(wavs)
@@ -139,11 +164,12 @@ class VTuberApp:
 
         answer, _ = self.router.extract_search(answer)      # กันโมเดลขอค้นซ้ำ
         answer, _ = self.router.extract_delegation(answer)
+        answer, emotion = self.router.extract_emotion(answer)
         c.print(f"[bold magenta]{self.cfg.persona.name}›[/] {answer}")
         self.history.append({"role": "user", "content": f"(ค้นเว็บ) {query}"})
         self.history.append({"role": "assistant", "content": answer})
         self._trim_history()
-        await self._speak(answer)
+        await self._speak(answer, emotion)
 
     # ------------------------------------------------------------------ #
     async def handle_line(self, line: str) -> bool:
@@ -174,10 +200,12 @@ class VTuberApp:
 
         spoken, task = self.router.extract_delegation(reply)
         spoken, query = self.router.extract_search(spoken)
+        spoken, emotion = self.router.extract_emotion(spoken)
         self.history.append({"role": "assistant", "content": reply})
         if spoken:
-            self.console.print(f"[bold magenta]{self.cfg.persona.name}›[/] {spoken}")
-            await self._speak(spoken)
+            tag = f" [dim]({emotion})[/]" if emotion else ""
+            self.console.print(f"[bold magenta]{self.cfg.persona.name}›[/]{tag} {spoken}")
+            await self._speak(spoken, emotion)
         if query:
             await self._search_and_answer(query)
         if task:
@@ -224,6 +252,17 @@ class VTuberApp:
                 await self._delegate(arg)
             else:
                 c.print("ใช้: [bold]/claude <อธิบายงานที่จะให้ทำ>[/]")
+        elif cmd == "/emotion":
+            if self.driver is None:
+                c.print("[yellow]ระบบสีหน้าไม่ทำงาน (ต้องต่อ VTube Studio ได้ก่อน)[/]")
+            elif arg.lower() in EMOTIONS:
+                self._apply_emotion(arg.lower())
+                c.print(f"[green]✓[/] เปลี่ยนสีหน้าเป็น [bold]{arg.lower()}[/]")
+            else:
+                cur = self.driver.emotion
+                c.print("[bold]อารมณ์ที่เลือกได้:[/]")
+                for e in EMOTIONS:
+                    c.print(f"  {'[green]●[/]' if e == cur else ' '} /emotion {e}")
         elif cmd == "/search":
             if arg:
                 await self._search_and_answer(arg)
@@ -266,6 +305,8 @@ class VTuberApp:
         await self.cleanup()
 
     async def cleanup(self) -> None:
+        if self.driver is not None:
+            await self.driver.stop()
         if self.vts is not None:
             await self.vts.close()
         self.console.print("บ๊ายบายค่ะ 👋")

@@ -95,6 +95,14 @@ class AvatarConfig:
     noise_gate: float = 0.14
     smoothing_attack: float = 0.6
     smoothing_release: float = 0.25
+    # --- สีหน้า/ท่าทาง ---
+    expressions: bool = True        # เปิดระบบอารมณ์ + ขยับตอนอยู่เฉย + กะพริบตา
+    vowel_mouth: bool = True        # ขึ้นรูปปากตามสระ (VoiceA/I/U/E/O) ไม่ใช่แค่อ้า
+    emotion_blend: float = 0.15     # ความไวในการเปลี่ยนอารมณ์ (0..1)
+    idle_amount: float = 1.0        # ความแรงของการขยับตอนอยู่เฉย (0 = นิ่งสนิท)
+    blink_min_sec: float = 2.5
+    blink_max_sec: float = 6.0
+    default_emotion: str = "happy"
 
 
 @dataclass

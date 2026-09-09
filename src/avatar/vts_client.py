@@ -150,6 +150,27 @@ class VTSClient:
             self.last_error = f"{type(e).__name__}: {e}"
             self.connected = False
 
+    async def set_params(self, values: dict[str, float]) -> None:
+        """ฉีดหลายพารามิเตอร์พร้อมกันในคำขอเดียว (ประหยัดกว่ายิงทีละตัว)."""
+        if not self.connected or self._ws is None or not values:
+            return
+        try:
+            await self._ws.send(
+                self._msg(
+                    "InjectParameterDataRequest",
+                    {
+                        "faceFound": False,
+                        "mode": "set",
+                        "parameterValues": [
+                            {"id": k, "value": float(v)} for k, v in values.items()
+                        ],
+                    },
+                )
+            )
+        except Exception as e:  # noqa: BLE001
+            self.last_error = f"{type(e).__name__}: {e}"
+            self.connected = False
+
     async def input_parameters(self) -> list[dict]:
         """รายชื่อพารามิเตอร์อินพุตที่ VTS ฉีดค่าได้ (ใช้เช็กว่า mouth_param ถูกไหม)."""
         if not self.connected:

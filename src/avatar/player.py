@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import soundfile as sf
 
+from src.avatar.expressions import vowel_weights_from_audio
 from src.avatar.lipsync import envelope_from_audio
 from src.avatar.vts_client import VTSClient
+
+if TYPE_CHECKING:
+    from src.avatar.driver import AvatarDriver
 
 
 def _resample_linear(audio: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray:
@@ -47,6 +52,8 @@ class Player:
         attack: float = 0.6,
         release: float = 0.25,
         noise_gate: float = 0.14,
+        driver: "AvatarDriver | None" = None,
+        vowel_mouth: bool = True,
     ):
         self.vts = vts
         self.fps = fps
@@ -54,7 +61,16 @@ class Player:
         self.attack = attack
         self.release = release
         self.noise_gate = noise_gate
+        self.driver = driver          # ถ้ามี ให้ป้อนค่าปากผ่าน driver แทนการยิงเอง
+        self.vowel_mouth = vowel_mouth
         self._audio_ok = True
+
+    # ------------------------------------------------------------------ #
+    async def _push_mouth(self, mouth_open: float, vowels: dict[str, float] | None) -> None:
+        if self.driver is not None:
+            self.driver.set_mouth(mouth_open, vowels)
+        elif self.vts is not None:
+            await self.vts.set_mouth(mouth_open)
 
     # ------------------------------------------------------------------ #
     async def speak(self, wav_paths: list[Path]) -> None:
@@ -64,6 +80,11 @@ class Player:
         env = envelope_from_audio(
             audio, sr, self.fps, self.gain, self.attack, self.release, self.noise_gate
         )
+        vowels: dict[str, np.ndarray] | None = None
+        if self.vowel_mouth and self.driver is not None:
+            vowels = await asyncio.to_thread(
+                vowel_weights_from_audio, audio, sr, self.fps, env
+            )
 
         try:
             import sounddevice as sd
@@ -87,15 +108,23 @@ class Player:
                 if t >= dur:
                     break
                 idx = min(len(env) - 1, int(t * self.fps))
-                if self.vts is not None:
-                    await self.vts.set_mouth(float(env[idx]))
+                vw = (
+                    {k: float(v[idx]) for k, v in vowels.items()}
+                    if vowels is not None
+                    else None
+                )
+                await self._push_mouth(float(env[idx]), vw)
                 await asyncio.sleep(1.0 / self.fps)
         except asyncio.CancelledError:
             await asyncio.to_thread(sd.stop)
-            if self.vts is not None:
-                await self.vts.set_mouth(0.0)
+            await self._close_mouth()
             raise
         finally:
             await asyncio.to_thread(sd.wait)
-            if self.vts is not None:
-                await self.vts.set_mouth(0.0)
+            await self._close_mouth()
+
+    async def _close_mouth(self) -> None:
+        if self.driver is not None:
+            self.driver.clear_mouth()
+        elif self.vts is not None:
+            await self.vts.set_mouth(0.0)

@@ -17,6 +17,10 @@ _SEARCH_RE = re.compile(
     r"\[\[\s*SEARCH\s*:\s*(?P<query>.+?)\s*\]\]",
     re.IGNORECASE | re.DOTALL,
 )
+_EMOTION_RE = re.compile(
+    r"\[\[\s*EMOTION\s*:\s*(?P<emotion>[a-zA-Z_]+)\s*\]\]",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -71,3 +75,8 @@ class Router:
     def extract_search(cls, assistant_text: str) -> tuple[str, str | None]:
         """คืน (ข้อความที่ตัดมาร์กเกอร์ออกแล้ว, คำค้นเว็บ หรือ None)."""
         return cls._extract(_SEARCH_RE, "query", assistant_text)
+
+    @classmethod
+    def extract_emotion(cls, assistant_text: str) -> tuple[str, str | None]:
+        """คืน (ข้อความที่ตัดมาร์กเกอร์ออกแล้ว, ชื่ออารมณ์ หรือ None)."""
+        return cls._extract(_EMOTION_RE, "emotion", assistant_text)

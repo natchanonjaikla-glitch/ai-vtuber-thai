@@ -80,6 +80,15 @@ avatar:
   smoothing_attack: 0.6          # 0–1 ยิ่งมากยิ่งตอบไว (ตอนเสียงดังขึ้น)
   smoothing_release: 0.25        # 0–1 ยิ่งน้อยยิ่งค้างนาน (ตอนเสียงเบาลง)
 
+  # --- สีหน้า / ท่าทาง ---
+  expressions: true              # อารมณ์ + ขยับหัวตอนอยู่เฉย + กะพริบตา
+  vowel_mouth: true              # ขึ้นรูปปากตามสระ (VoiceA/I/U/E/O) ไม่ใช่แค่อ้า-หุบ
+  emotion_blend: 0.15            # ความไวเปลี่ยนอารมณ์ (มาก = เปลี่ยนเร็ว)
+  idle_amount: 1.0               # ความแรงการขยับตอนอยู่เฉย (0 = นิ่งสนิท)
+  blink_min_sec: 2.5             # ช่วงเวลากะพริบตา
+  blink_max_sec: 6.0
+  default_emotion: "happy"       # neutral/happy/excited/sad/surprised/angry/shy/thinking
+
 web:
   # ค้นข้อมูลจากอินเทอร์เน็ตด้วย DuckDuckGo (ฟรี ไม่ต้องใช้ API key)
   enabled: true
