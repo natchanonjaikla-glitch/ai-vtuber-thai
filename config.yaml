@@ -8,9 +8,9 @@ llm:
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"            # LM Studio ไม่ตรวจ key แต่ SDK ต้องมีค่า
   # ชื่อโมเดลตามที่โหลดไว้ใน LM Studio (ดูจากแท็บ Developer / My Models)
-  model: "scb10x/llama3.1-typhoon2-8b-instruct"
+  model: "google/gemma-4-e4b"
   temperature: 0.7
-  max_tokens: 512
+  max_tokens: 1024
   timeout_sec: 120
   # จำนวนคู่สนทนาที่เก็บเป็น context (นับเป็น "รอบ" user+assistant)
   history_turns: 8
