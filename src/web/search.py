@@ -80,29 +80,48 @@ class WebSearch:
 
     # ------------------------------------------------------------------ #
     def context_for_llm(self, query: str) -> tuple[str, list[SearchResult]]:
-        """คืน (ข้อความ context พร้อมใส่ prompt, ผลค้นหาดิบ)."""
+        """คืน (ข้อความ context พร้อมใส่ prompt, ผลค้นหาดิบ).
+
+        snippet ของ DuckDuckGo มักเป็นแค่คำโปรยเว็บ ไม่มีตัวเลข/ข้อเท็จจริงจริง ๆ
+        (เช่นค้น "ราคาทองวันนี้" ได้แค่ "เช็คราคาทองล่าสุด...") ถ้าไม่ดึงหน้าเว็บมาด้วย
+        โมเดลจะไม่มีข้อมูลให้อ่านแล้วไปเดาจากความจำตอนเทรนแทน → ตอบผิดแบบมั่นใจ
+        """
         results = self.search(query)
         if not results:
             return "", []
 
         blocks = [r.as_context() for r in results]
 
-        # ดึงเนื้อหาเต็มจาก n หน้าแรก ถ้าเปิดไว้
-        for r in results[: max(0, self.cfg.fetch_pages)]:
-            page = self.fetch_page(r.url)
-            if page:
-                blocks.append(f"- เนื้อหาจาก {r.url}:\n  {page}")
+        n = max(0, self.cfg.fetch_pages)
+        if n:
+            # ดึงหลายหน้าพร้อมกัน ไม่งั้นรอนานเกินไป
+            from concurrent.futures import ThreadPoolExecutor
 
-        context = "\n".join(blocks)
-        return context, results
+            targets = results[:n]
+            with ThreadPoolExecutor(max_workers=min(4, len(targets))) as pool:
+                pages = list(pool.map(lambda r: self.fetch_page(r.url), targets))
+            for r, page in zip(targets, pages):
+                if page:
+                    blocks.append(f"[เนื้อหาจากหน้าเว็บ {r.url}]\n{page}")
+
+        return "\n\n".join(blocks), results
 
 
 SEARCH_PROMPT = """\
-นี่คือผลการค้นหาจากอินเทอร์เน็ตสำหรับคำถาม: "{query}"
+วันเวลาปัจจุบัน: {now}
+
+ข้อมูลที่ค้นมาจากอินเทอร์เน็ตสำหรับคำถาม "{query}":
 
 {context}
 
-ตอบคำถามข้างต้นเป็นภาษาไทยสั้น ๆ 1–3 ประโยค ด้วยน้ำเสียงปกติของคุณ
-อ้างอิงเฉพาะข้อมูลที่เห็นข้างบน ถ้าข้อมูลไม่พอให้บอกตรง ๆ ว่าหาไม่เจอ
-ห้ามอ่าน URL ออกเสียง และไม่ต้องบอกว่า "จากผลการค้นหา"
+--- จบข้อมูลที่ค้นมา ---
+
+กติกาการตอบ (สำคัญมาก):
+1. ใช้ได้เฉพาะตัวเลขและข้อเท็จจริงที่ปรากฏในข้อมูลข้างบนเท่านั้น
+2. ห้ามใช้ความรู้เดิมที่คุณจำมาโดยเด็ดขาด โดยเฉพาะตัวเลข ราคา วันที่ สถิติ
+   ความจำของคุณเป็นข้อมูลเก่าและผิดแน่นอน
+3. ถ้าข้อมูลข้างบนไม่มีคำตอบ ให้บอกตรง ๆ ว่า "หาข้อมูลที่ชัดเจนไม่เจอค่ะ"
+   ห้ามเดาตัวเลขขึ้นมาเองเป็นอันขาด
+4. ตอบเป็นภาษาไทย 1–3 ประโยค ด้วยน้ำเสียงปกติของคุณ
+5. ห้ามอ่าน URL ออกเสียง และไม่ต้องขึ้นต้นว่า "จากผลการค้นหา"
 """

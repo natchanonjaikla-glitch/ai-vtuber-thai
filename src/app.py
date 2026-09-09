@@ -18,6 +18,16 @@ from src.llm.router import Router
 from src.tts.manager import ENGINES, TTSManager
 from src.web.search import SEARCH_PROMPT, SearchError, WebSearch
 
+def _now_th() -> str:
+    """วันเวลาปัจจุบันแบบไทย — ใส่ใน prompt ค้นเว็บ กันโมเดลตีความ "วันนี้" ผิด."""
+    from datetime import datetime
+
+    d = datetime.now()
+    months = ("มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+              "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม")
+    return f"{d.day} {months[d.month - 1]} {d.year + 543} เวลา {d:%H:%M} น."
+
+
 HELP = """[bold]คำสั่ง[/]
   /say <ข้อความ>     ให้พูดข้อความนี้ทันที (ทดสอบเสียง + ปาก)
   /voice [ชื่อ]        สลับเสียง (piper/edge/mms/f5) — ไม่ใส่ชื่อ = ดูรายการ
@@ -154,7 +164,9 @@ class VTuberApp:
 
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": SEARCH_PROMPT.format(query=query, context=context)},
+            {"role": "user", "content": SEARCH_PROMPT.format(
+                query=query, context=context, now=_now_th()
+            )},
         ]
         try:
             answer = await asyncio.to_thread(self.llm.chat, messages)

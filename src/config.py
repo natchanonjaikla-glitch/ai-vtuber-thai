@@ -121,8 +121,8 @@ class WebConfig:
     enabled: bool = True
     region: str = "th-th"
     max_results: int = 5
-    fetch_pages: int = 0        # ดึงเนื้อหาเต็มจากกี่หน้าแรก (0 = ใช้แค่ snippet, เร็วกว่า)
-    fetch_chars: int = 1500
+    fetch_pages: int = 3        # ดึงเนื้อหาเต็มจากกี่หน้าแรก (0 = ใช้แค่ snippet, เร็วกว่า)
+    fetch_chars: int = 2500
     timeout_sec: int = 20
     trigger_phrases: list[str] = field(
         default_factory=lambda: ["ค้นหา", "เสิร์ช", "หาข้อมูล", "กูเกิล", "/search"]
