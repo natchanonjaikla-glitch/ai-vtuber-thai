@@ -33,21 +33,58 @@ class VTSClient:
         self._ws: websockets.WebSocketClientProtocol | None = None
         self.connected = False
         self.last_error: str | None = None
+        # reader task เดียวคอยแจกคำตอบให้ตรง requestID — สำคัญเพราะ lip-sync
+        # ยิง InjectParameterData 30 ครั้ง/วิ พร้อมกับที่โค้ดอื่นอาจถาม RPC อยู่
+        self._reader: asyncio.Task | None = None
+        self._pending: dict[str, asyncio.Future] = {}
 
     # ------------------------------------------------------------------ #
-    def _msg(self, message_type: str, data: dict | None = None) -> str:
+    def _msg(self, message_type: str, data: dict | None = None, req_id: str = "") -> str:
         return json.dumps(
-            {**_API, "requestID": uuid.uuid4().hex, "messageType": message_type, "data": data or {}}
+            {
+                **_API,
+                "requestID": req_id or uuid.uuid4().hex,
+                "messageType": message_type,
+                "data": data or {},
+            }
         )
 
-    async def _rpc(self, message_type: str, data: dict | None = None) -> dict:
-        await self._ws.send(self._msg(message_type, data))
-        return json.loads(await self._ws.recv())
+    async def _read_loop(self) -> None:
+        try:
+            async for raw in self._ws:
+                try:
+                    msg = json.loads(raw)
+                except (ValueError, TypeError):
+                    continue
+                fut = self._pending.pop(msg.get("requestID", ""), None)
+                if fut is not None and not fut.done():
+                    fut.set_result(msg)
+        except Exception as e:  # noqa: BLE001 - ต่อหลุด
+            self.last_error = f"{type(e).__name__}: {e}"
+            self.connected = False
+        finally:
+            for fut in self._pending.values():
+                if not fut.done():
+                    fut.cancel()
+            self._pending.clear()
+
+    async def _rpc(self, message_type: str, data: dict | None = None, timeout: float = 15.0) -> dict:
+        req_id = uuid.uuid4().hex
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[req_id] = fut
+        try:
+            await self._ws.send(self._msg(message_type, data, req_id))
+            return await asyncio.wait_for(fut, timeout=timeout)
+        except asyncio.TimeoutError as e:
+            raise RuntimeError(f"VTS ไม่ตอบ {message_type} ใน {timeout:.0f} วินาที") from e
+        finally:
+            self._pending.pop(req_id, None)
 
     # ------------------------------------------------------------------ #
     async def connect(self) -> bool:
         try:
             self._ws = await websockets.connect(self.url, max_size=2**20, open_timeout=5)
+            self._reader = asyncio.create_task(self._read_loop())
             await self._authenticate()
             self.connected = True
             return True
@@ -129,6 +166,20 @@ class VTSClient:
         resp = await self._rpc("CurrentModelRequest")
         return resp.get("data", {})
 
+    async def available_models(self) -> list[dict]:
+        """รายชื่อโมเดล Live2D ทั้งหมดที่ VTS เห็น."""
+        if not self.connected:
+            return []
+        resp = await self._rpc("AvailableModelsRequest")
+        return resp.get("data", {}).get("availableModels", [])
+
+    async def load_model(self, model_id: str) -> dict:
+        """สั่ง VTS โหลดโมเดลตาม modelID."""
+        if not self.connected:
+            return {}
+        resp = await self._rpc("ModelLoadRequest", {"modelID": model_id})
+        return resp.get("data", {})
+
     async def close(self) -> None:
         if self._ws is not None:
             try:
@@ -136,4 +187,11 @@ class VTSClient:
                 await self._ws.close()
             except Exception:  # noqa: BLE001
                 pass
+        if self._reader is not None:
+            self._reader.cancel()
+            try:
+                await self._reader
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+            self._reader = None
         self.connected = False
