@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -55,14 +56,24 @@ class VTSClient:
             self.connected = False
             return False
 
-    async def _authenticate(self) -> None:
+    async def _authenticate(self, auth_timeout: float = 120.0) -> None:
         token = self.token_file.read_text(encoding="utf-8").strip() if self.token_file.exists() else ""
 
         if not token:
-            resp = await self._rpc(
-                "AuthenticationTokenRequest",
-                {"pluginName": self.plugin_name, "pluginDeveloper": self.plugin_developer},
-            )
+            # VTS จะเด้ง popup ให้ผู้ใช้กด Allow — ตัวนี้บล็อกจนกว่าจะกด
+            try:
+                resp = await asyncio.wait_for(
+                    self._rpc(
+                        "AuthenticationTokenRequest",
+                        {"pluginName": self.plugin_name, "pluginDeveloper": self.plugin_developer},
+                    ),
+                    timeout=auth_timeout,
+                )
+            except asyncio.TimeoutError as e:
+                raise RuntimeError(
+                    f"รอกด Allow ใน VTube Studio เกิน {auth_timeout:.0f} วินาที — "
+                    "popup อาจซ่อนอยู่หลังหน้าต่างอื่น ลอง Alt+Tab ไปที่ VTube Studio"
+                ) from e
             token = resp.get("data", {}).get("authenticationToken", "")
             if not token:
                 raise RuntimeError(f"ขอ auth token ไม่สำเร็จ: {resp.get('data')}")
