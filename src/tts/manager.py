@@ -24,9 +24,44 @@ _EMOJI_RE = re.compile(
 _MULTI_WS_RE = re.compile(r"\s+")
 
 
+# เอนจินเสียงไทย (Piper/MMS) อ่านตัวอักษรละตินไม่ได้ — มันจะ "ตัดทิ้งเงียบ ๆ"
+# ทำให้คำหายไปจากเสียง จึงแปลงเป็นคำอ่านไทยก่อน
+_LATIN_WORDS = {
+    "vtuber": "วีทูเบอร์", "ai": "เอไอ", "api": "เอพีไอ", "python": "ไพธอน",
+    "javascript": "จาวาสคริปต์", "code": "โค้ด", "claude": "คล็อด", "github": "กิตฮับ",
+    "server": "เซิร์ฟเวอร์", "error": "เออเรอร์", "bug": "บั๊ก", "file": "ไฟล์",
+    "computer": "คอมพิวเตอร์", "internet": "อินเทอร์เน็ต", "online": "ออนไลน์",
+    "live": "ไลฟ์", "stream": "สตรีม", "game": "เกม", "ok": "โอเค", "hello": "ฮัลโหล",
+    "windows": "วินโดวส์", "google": "กูเกิล", "youtube": "ยูทูบ", "discord": "ดิสคอร์ด",
+    # คำย่อที่คนไทยอ่านเป็นคำ ไม่ได้สะกดทีละตัว
+    "ram": "แรม", "rom": "รอม", "app": "แอป", "pc": "พีซี", "tv": "ทีวี",
+}
+# ตัวอักษรละตินทีละตัว (ใช้กับคำย่อ เช่น CPU GPU RAM)
+_LATIN_LETTERS = {
+    "a": "เอ", "b": "บี", "c": "ซี", "d": "ดี", "e": "อี", "f": "เอฟ", "g": "จี",
+    "h": "เอช", "i": "ไอ", "j": "เจ", "k": "เค", "l": "แอล", "m": "เอ็ม", "n": "เอ็น",
+    "o": "โอ", "p": "พี", "q": "คิว", "r": "อาร์", "s": "เอส", "t": "ที", "u": "ยู",
+    "v": "วี", "w": "ดับเบิลยู", "x": "เอ็กซ์", "y": "วาย", "z": "แซด",
+}
+_LATIN_RUN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+
+
+def _latin_to_thai(match: re.Match) -> str:
+    word = match.group(0)
+    low = word.lower()
+    if low in _LATIN_WORDS:
+        return _LATIN_WORDS[low]
+    # คำย่อตัวพิมพ์ใหญ่สั้น ๆ (CPU, GPU, RAM, HTML) → สะกดทีละตัว
+    if word.isupper() and 2 <= len(word) <= 5:
+        return "".join(_LATIN_LETTERS.get(c.lower(), c) for c in word)
+    # คำอังกฤษอื่น ๆ สะกดทีละตัวจะฟังไม่รู้เรื่อง ปล่อยให้เอนจินตัดทิ้งเอง
+    return word
+
+
 def _clean(text: str) -> str:
     text = _EMOJI_RE.sub("", text)
     text = text.replace("*", "").replace("`", "").replace("#", "")
+    text = _LATIN_RUN_RE.sub(_latin_to_thai, text)
     return _MULTI_WS_RE.sub(" ", text).strip()
 
 

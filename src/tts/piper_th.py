@@ -47,7 +47,14 @@ class PiperEngine(TTSEngine):
     def load(self) -> None:
         if self._loaded:
             return
+        import logging
+
         from piper import PiperVoice
+
+        # ตัวแปลงเสียงไทยของ Piper จะ warn ทุกตัวอักษรที่ไม่ใช่ไทย ("Dropping
+        # non-Thai character: 'V'") ทำให้ log รก — เราจัดการเรื่องคำอังกฤษ
+        # ด้วย persona prompt (ให้เขียนเป็นคำอ่านไทย) อยู่แล้ว
+        logging.getLogger("piper.phonemize_thai").setLevel(logging.ERROR)
 
         onnx, conf = self._voice_paths()
         self._voice = PiperVoice.load(onnx, config_path=conf, use_cuda=False)
