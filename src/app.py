@@ -14,10 +14,13 @@ from src.llm.client import LLMClient, LLMUnavailable
 from src.llm.persona import build_system_prompt
 from src.llm.router import Router
 from src.tts.manager import ENGINES, TTSManager
+from src.web.search import SEARCH_PROMPT, SearchError, WebSearch
 
 HELP = """[bold]คำสั่ง[/]
   /say <ข้อความ>     ให้พูดข้อความนี้ทันที (ทดสอบเสียง + ปาก)
   /voice [ชื่อ]        สลับเสียง (piper/edge/mms/f5) — ไม่ใส่ชื่อ = ดูรายการ
+  /search <คำค้น>    ค้นข้อมูลจากเว็บแล้วสรุปให้ฟัง
+  /web on|off        เปิด/ปิดการค้นเว็บ
   /project <path>    ตั้งโฟลเดอร์โปรเจกต์ให้ Claude Code
   /claude <งาน>      ส่งงานให้ Claude Code ตรง ๆ
   /reload            ล้างประวัติ + โหลดบุคลิกใหม่จาก config
@@ -31,7 +34,8 @@ class VTuberApp:
         self.cfg = cfg
         self.console = Console()
         self.llm = LLMClient(cfg.llm)
-        self.router = Router(cfg.coding.trigger_phrases)
+        self.router = Router(cfg.coding.trigger_phrases, cfg.web.trigger_phrases)
+        self.web = WebSearch(cfg.web)
         self.tts = TTSManager(cfg)
         self.system_prompt = build_system_prompt(cfg.persona)
         self.history: list[dict[str, str]] = []
@@ -101,6 +105,46 @@ class VTuberApp:
             c.print(f"[dim]ค่าใช้จ่าย ~${res.cost_usd:.4f}[/]")
         await self._speak(res.summary)
 
+    async def _search_and_answer(self, query: str) -> None:
+        """ค้นเว็บ → ให้ LLM สรุปเป็นไทยสั้น ๆ → พูด."""
+        c = self.console
+        if not self.cfg.web.enabled:
+            await self._speak("ตอนนี้ปิดการค้นเว็บอยู่ค่ะ")
+            return
+
+        c.print(f"[cyan]🔎 กำลังค้นเว็บ:[/] {query}")
+        try:
+            context, results = await asyncio.to_thread(self.web.context_for_llm, query)
+        except SearchError as e:
+            c.print(f"[red]{e}[/]")
+            await self._speak("ขอโทษค่ะ ตอนนี้ค้นข้อมูลจากเน็ตไม่ได้")
+            return
+
+        if not results:
+            await self._speak(f"หาข้อมูลเรื่อง {query} ไม่เจอเลยค่ะ")
+            return
+
+        for r in results[:3]:
+            c.print(f"  [dim]• {r.title[:70]}[/]")
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": SEARCH_PROMPT.format(query=query, context=context)},
+        ]
+        try:
+            answer = await asyncio.to_thread(self.llm.chat, messages)
+        except LLMUnavailable as e:
+            c.print(f"[red]{e}[/]")
+            return
+
+        answer, _ = self.router.extract_search(answer)      # กันโมเดลขอค้นซ้ำ
+        answer, _ = self.router.extract_delegation(answer)
+        c.print(f"[bold magenta]{self.cfg.persona.name}›[/] {answer}")
+        self.history.append({"role": "user", "content": f"(ค้นเว็บ) {query}"})
+        self.history.append({"role": "assistant", "content": answer})
+        self._trim_history()
+        await self._speak(answer)
+
     # ------------------------------------------------------------------ #
     async def handle_line(self, line: str) -> bool:
         line = line.strip()
@@ -112,6 +156,9 @@ class VTuberApp:
         pre = self.router.pre_route(line)
         if pre.mode == "delegate_code":
             await self._delegate(pre.task)
+            return True
+        if pre.mode == "search":
+            await self._search_and_answer(pre.task)
             return True
 
         self.history.append({"role": "user", "content": line})
@@ -126,10 +173,13 @@ class VTuberApp:
             return True
 
         spoken, task = self.router.extract_delegation(reply)
+        spoken, query = self.router.extract_search(spoken)
         self.history.append({"role": "assistant", "content": reply})
         if spoken:
             self.console.print(f"[bold magenta]{self.cfg.persona.name}›[/] {spoken}")
             await self._speak(spoken)
+        if query:
+            await self._search_and_answer(query)
         if task:
             await self._delegate(task)
         return True
@@ -174,6 +224,14 @@ class VTuberApp:
                 await self._delegate(arg)
             else:
                 c.print("ใช้: [bold]/claude <อธิบายงานที่จะให้ทำ>[/]")
+        elif cmd == "/search":
+            if arg:
+                await self._search_and_answer(arg)
+            else:
+                c.print("ใช้: [bold]/search <สิ่งที่อยากรู้>[/]")
+        elif cmd == "/web":
+            self.cfg.web.enabled = arg.lower() not in ("off", "ปิด", "0", "false")
+            c.print(f"ค้นเว็บ: [bold]{'เปิด' if self.cfg.web.enabled else 'ปิด'}[/]")
         elif cmd == "/reload":
             self.cfg = load_config()
             self.system_prompt = build_system_prompt(self.cfg.persona)

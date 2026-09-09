@@ -32,3 +32,7 @@ edge-tts>=7.2
 # --- TTS โคลนเสียง (ออปชัน): F5-TTS-THAI ---
 # ติดตั้งแยกด้วย:  pip install -r requirements-f5.txt
 # (แยกไว้เพราะ dependency หนักและบางทีชนกัน — แอปทำงานได้ด้วย MMS ก่อน)
+
+# --- Web search (DuckDuckGo, free, no API key) ---
+ddgs>=9.16
+lxml>=6.1

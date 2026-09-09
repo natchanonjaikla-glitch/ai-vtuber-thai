@@ -36,6 +36,7 @@ class PersonaConfig:
     language: str = "th"
     style: str = "เป็น VTuber สาวสดใส พูดไทยเป็นธรรมชาติ ตอบสั้น 1–3 ประโยค"
     delegate_marker: str = "[[DELEGATE_TO_CLAUDE: <อธิบายงาน> ]]"
+    search_marker: str = "[[SEARCH: <คำค้น> ]]"
 
 
 @dataclass
@@ -108,12 +109,26 @@ class CodingConfig:
 
 
 @dataclass
+class WebConfig:
+    enabled: bool = True
+    region: str = "th-th"
+    max_results: int = 5
+    fetch_pages: int = 0        # ดึงเนื้อหาเต็มจากกี่หน้าแรก (0 = ใช้แค่ snippet, เร็วกว่า)
+    fetch_chars: int = 1500
+    timeout_sec: int = 20
+    trigger_phrases: list[str] = field(
+        default_factory=lambda: ["ค้นหา", "เสิร์ช", "หาข้อมูล", "กูเกิล", "/search"]
+    )
+
+
+@dataclass
 class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     persona: PersonaConfig = field(default_factory=PersonaConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     avatar: AvatarConfig = field(default_factory=AvatarConfig)
     coding: CodingConfig = field(default_factory=CodingConfig)
+    web: WebConfig = field(default_factory=WebConfig)
     project_root: Path = PROJECT_ROOT
 
     # -- helpers -------------------------------------------------------------
