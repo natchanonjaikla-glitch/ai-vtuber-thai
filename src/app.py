@@ -13,11 +13,11 @@ from src.config import AppConfig, load_config
 from src.llm.client import LLMClient, LLMUnavailable
 from src.llm.persona import build_system_prompt
 from src.llm.router import Router
-from src.tts.manager import TTSManager
+from src.tts.manager import ENGINES, TTSManager
 
 HELP = """[bold]คำสั่ง[/]
   /say <ข้อความ>     ให้พูดข้อความนี้ทันที (ทดสอบเสียง + ปาก)
-  /voice mms|f5      สลับเอนจินเสียง
+  /voice [ชื่อ]        สลับเสียง (piper/edge/mms/f5) — ไม่ใส่ชื่อ = ดูรายการ
   /project <path>    ตั้งโฟลเดอร์โปรเจกต์ให้ Claude Code
   /claude <งาน>      ส่งงานให้ Claude Code ตรง ๆ
   /reload            ล้างประวัติ + โหลดบุคลิกใหม่จาก config
@@ -152,8 +152,11 @@ class VTuberApp:
         elif cmd == "/say":
             await self._speak(arg or "สวัสดีค่ะ นี่คือการทดสอบระบบเสียงและการขยับปาก")
         elif cmd == "/voice":
-            if arg not in ("mms", "f5"):
-                c.print("ใช้: [bold]/voice mms[/] หรือ [bold]/voice f5[/]")
+            if arg not in ENGINES:
+                c.print("[bold]เสียงที่เลือกได้:[/]")
+                for k, desc in ENGINES.items():
+                    mark = "[green]●[/]" if k == self.tts.engine_name else " "
+                    c.print(f"  {mark} [bold]/voice {k}[/]  — {desc}")
             else:
                 try:
                     self.tts.set_engine(arg)

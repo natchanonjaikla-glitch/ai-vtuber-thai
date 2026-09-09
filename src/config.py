@@ -54,13 +54,31 @@ class F5Config:
 
 
 @dataclass
+class PiperConfig:
+    voice: str = "th_TH-tsync2-medium"
+    speed: float = 1.0          # >1 = เร็วขึ้น
+    noise_scale: float = 0.667  # ความแปรผันของน้ำเสียง
+    noise_w: float = 0.8        # ความแปรผันของจังหวะ
+
+
+@dataclass
+class EdgeConfig:
+    voice: str = "th-TH-PremwadeeNeural"   # หญิง | ชาย = th-TH-NiwatNeural
+    rate: str = "+0%"
+    pitch: str = "+0Hz"
+    volume: str = "+0%"
+
+
+@dataclass
 class TTSConfig:
-    engine: str = "mms"
+    engine: str = "piper"
     cpu_threads: int = 8
     cache_dir: str = ".cache/tts"
     max_chars_per_chunk: int = 180
     mms: MMSConfig = field(default_factory=MMSConfig)
     f5: F5Config = field(default_factory=F5Config)
+    piper: PiperConfig = field(default_factory=PiperConfig)
+    edge: EdgeConfig = field(default_factory=EdgeConfig)
 
 
 @dataclass

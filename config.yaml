@@ -28,13 +28,27 @@ persona:
   delegate_marker: "[[DELEGATE_TO_CLAUDE: <อธิบายงานให้ละเอียด> ]]"
 
 tts:
-  # "mms" = เร็ว รันแชทสดได้ (เสียงเดียว หุ่นยนต์นิด ๆ)
-  # "f5"  = โคลนเสียงได้ คุณภาพดี แต่บนเครื่องนี้ (ไม่มี CUDA) ช้า ~6 นาที/ประโยค
-  #         → ใช้เฉพาะอัดเสียงล่วงหน้า ไม่เหมาะแชทสด
-  engine: "mms"
+  # เลือกเสียง — สลับตอนรันได้ด้วย /voice <ชื่อ>
+  #   piper = ไทย ธรรมชาติพอควร เร็วมาก offline  ← แนะนำ
+  #   edge  = ธรรมชาติที่สุด (neural ของ Microsoft) เร็วมาก แต่ "ต้องต่อเน็ต"
+  #   mms   = เร็ว offline แต่เสียงหุ่นยนต์
+  #   f5    = โคลนเสียงจากตัวอย่างได้ offline แต่ช้ามาก ~6 นาที/ประโยค (อัดล่วงหน้าเท่านั้น)
+  engine: "piper"
   cpu_threads: 8                  # Ryzen 5 5600 = 12 threads, เผื่อ 8 ให้ TTS
   cache_dir: ".cache/tts"
   max_chars_per_chunk: 180        # ตัดประโยคยาวไม่ให้เกินนี้ต่อ 1 ครั้งสังเคราะห์
+
+  piper:
+    voice: "th_TH-tsync2-medium"   # เสียงไทยของ Piper (โมเดล ~60 MB โหลดอัตโนมัติ)
+    speed: 1.0                     # >1 = พูดเร็วขึ้น
+    noise_scale: 0.667             # ความแปรผันของน้ำเสียง (สูง = มีอารมณ์ขึ้น)
+    noise_w: 0.8                   # ความแปรผันของจังหวะ
+
+  edge:
+    voice: "th-TH-PremwadeeNeural" # หญิง | ชาย = "th-TH-NiwatNeural"
+    rate: "+0%"                    # เช่น "+10%" ให้พูดเร็วขึ้น
+    pitch: "+0Hz"                  # เช่น "+20Hz" ให้เสียงสูงขึ้น
+    volume: "+0%"
 
   mms:
     model_id: "facebook/mms-tts-tha"

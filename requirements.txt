@@ -17,6 +17,18 @@ transformers>=4.44
 torch>=2.2             # บน Windows = CPU build อัตโนมัติ
 pythainlp>=5.0         # แบ่งประโยคภาษาไทย
 
-# --- TTS เอนจินหลัก: F5-TTS-THAI ---
+# --- TTS เอนจินหลัก: Piper (เสียงไทย th_TH-tsync2, offline, เร็วมาก) ---
+piper-tts>=1.8
+unicode-rbnf>=2.4      # แปลงตัวเลขเป็นคำอ่านไทย
+nltk>=3.9              # tltk ต้องใช้
+sklearn-crfsuite>=0.5  # tltk ต้องใช้
+gensim>=4.4            # tltk ต้องใช้
+# tltk = ตัวแปลงอักษรไทย→เสียง ต้องลงแบบข้าม dep (pin scikit-learn เก่าเกินไป):
+#   pip install tltk --no-deps
+
+# --- TTS ออนไลน์ (ออปชัน): Edge-TTS เสียง neural ไทยของ Microsoft ---
+edge-tts>=7.2
+
+# --- TTS โคลนเสียง (ออปชัน): F5-TTS-THAI ---
 # ติดตั้งแยกด้วย:  pip install -r requirements-f5.txt
 # (แยกไว้เพราะ dependency หนักและบางทีชนกัน — แอปทำงานได้ด้วย MMS ก่อน)

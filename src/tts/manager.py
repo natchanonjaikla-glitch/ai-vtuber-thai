@@ -9,6 +9,14 @@ from src.config import AppConfig
 from src.tts.base import TTSEngine
 from src.tts.mms import MMSEngine
 
+# ชื่อเอนจินที่รองรับ → คำอธิบายสั้น ๆ (ใช้ใน /voice และข้อความ error)
+ENGINES = {
+    "piper": "ไทย ธรรมชาติพอควร เร็วมาก offline (แนะนำ)",
+    "edge":  "ธรรมชาติที่สุด เร็วมาก แต่ต้องต่อเน็ต",
+    "mms":   "เร็ว offline แต่เสียงหุ่นยนต์",
+    "f5":    "โคลนเสียงได้ offline แต่ช้ามาก (~6 นาที/ประโยค)",
+}
+
 # ตัดอิโมจิ / สัญลักษณ์ที่อ่านออกเสียงไม่ได้ออกก่อนส่งเข้า TTS
 _EMOJI_RE = re.compile(
     "[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF←-⇿⌀-⏿]"
@@ -85,13 +93,21 @@ class TTSManager:
 
     # ------------------------------------------------------------------ #
     def _build_engine(self, name: str) -> TTSEngine:
+        if name == "piper":
+            from src.tts.piper_th import PiperEngine
+
+            return PiperEngine(self.cfg.tts.piper, self.cfg.tts.cpu_threads)
+        if name == "edge":
+            from src.tts.edge import EdgeEngine
+
+            return EdgeEngine(self.cfg.tts.edge)
         if name == "mms":
             return MMSEngine(self.cfg.tts.mms, self.cfg.tts.cpu_threads)
         if name == "f5":
             from src.tts.f5_thai import F5ThaiEngine
 
             return F5ThaiEngine(self.cfg.tts.f5, self.cfg.project_root, self.cfg.tts.cpu_threads)
-        raise ValueError(f"ไม่รู้จักเอนจิน TTS: {name!r} (รองรับ: mms, f5)")
+        raise ValueError(f"ไม่รู้จักเอนจิน TTS: {name!r} (รองรับ: {', '.join(ENGINES)})")
 
     def get_engine(self, name: str | None = None) -> TTSEngine:
         name = name or self.engine_name
@@ -124,7 +140,24 @@ class TTSManager:
                 f"{engine.name}|{engine.sample_rate}|{chunk}".encode()
             ).hexdigest()[:16]
             out = self.cache_dir / f"{engine.name}_{key}.wav"
+
+            # ไฟล์เล็กเกินไป = ค้างจากรอบที่พัง ถือว่าไม่มี
+            if out.exists() and out.stat().st_size < 128:
+                out.unlink(missing_ok=True)
+
             if not out.exists():
-                engine.synth(chunk, out)
+                # เขียนลงไฟล์ชั่วคราวก่อนแล้วค่อย rename — ถ้า synth พังกลางคัน
+                # จะไม่เหลือไฟล์เสียใน cache ให้รอบหน้าไปอ่าน
+                # ต้องลงท้าย .wav เพราะ soundfile เดา format จากนามสกุล
+                tmp = out.with_name(f"~{out.stem}.part.wav")
+                try:
+                    engine.synth(chunk, tmp)
+                    if not tmp.exists() or tmp.stat().st_size < 128:
+                        raise RuntimeError(
+                            f"เอนจิน {engine.name} สังเคราะห์เสียงไม่ออก (ไฟล์ว่าง) สำหรับ: {chunk[:40]!r}"
+                        )
+                    tmp.replace(out)
+                finally:
+                    tmp.unlink(missing_ok=True)
             paths.append(out)
         return paths
