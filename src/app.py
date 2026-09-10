@@ -13,10 +13,11 @@ from src.avatar.vts_client import VTSClient
 from src.coding.claude_code import run_claude
 from src.config import AppConfig, load_config
 from src.llm.client import LLMClient, LLMUnavailable
-from src.llm.persona import build_system_prompt
+from src.llm.persona import build_search_system_prompt, build_system_prompt
 from src.llm.router import Router
 from src.tts.manager import ENGINES, TTSManager
 from src.web.search import SEARCH_PROMPT, SearchError, WebSearch
+
 
 def _now_th() -> str:
     """วันเวลาปัจจุบันแบบไทย — ใส่ใน prompt ค้นเว็บ กันโมเดลตีความ "วันนี้" ผิด."""
@@ -163,7 +164,7 @@ class VTuberApp:
             c.print(f"  [dim]• {r.title[:70]}[/]")
 
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": build_search_system_prompt(self.cfg.persona)},
             {"role": "user", "content": SEARCH_PROMPT.format(
                 query=query, context=context, now=_now_th()
             )},

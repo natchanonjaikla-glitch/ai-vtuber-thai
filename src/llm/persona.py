@@ -47,3 +47,27 @@ def build_system_prompt(cfg: PersonaConfig) -> str:
         delegate_marker=cfg.delegate_marker,
         search_marker=cfg.search_marker,
     )
+
+
+_SEARCH_TEMPLATE = """คุณคือ "{name}" AI VTuber ที่พูดคุยสด เสียงของคุณถูกอ่านออกเสียงจริง
+
+{style}
+
+ตอบเป็นภาษา{language_name} สั้น กระชับ เป็นประโยคพูด ไม่ใช้ markdown
+ขึ้นต้นด้วยมาร์กเกอร์อารมณ์บรรทัดเดียว เช่น [[EMOTION: happy]]
+(เลือกจาก neutral, happy, excited, sad, surprised, angry, shy, thinking)
+"""
+
+
+def build_search_system_prompt(cfg: PersonaConfig) -> str:
+    """เวอร์ชันสั้นสำหรับสรุปผลค้นเว็บ
+
+    prompt ตอนค้นเว็บมี context ยาวอยู่แล้ว การใส่ system prompt เต็ม (ที่มีคำสั่ง
+    เรื่องมาร์กเกอร์ค้นเว็บ/ส่งงาน Claude ซึ่งไม่ได้ใช้ตรงนี้) ทำให้ prompt ยาวขึ้น
+    อีกพันกว่าตัวอักษร แลกกับเวลาประมวลผลที่นานขึ้นโดยไม่ได้อะไรกลับมา
+    """
+    return _SEARCH_TEMPLATE.format(
+        name=cfg.name,
+        style=cfg.style.strip(),
+        language_name=_LANG_NAME.get(cfg.language, cfg.language),
+    )

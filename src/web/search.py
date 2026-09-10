@@ -16,6 +16,12 @@ _WS_RE = re.compile(r"\s+")
 
 _NUMERIC_RE = re.compile(r"\d[\d,]*\.?\d*")
 
+# หน้าที่ดึงมาแล้วไม่เคยได้เนื้อหา (โซเชียล / SPA ที่ render ด้วย JS)
+_SKIP_DOMAINS = (
+    "facebook.com", "instagram.com", "twitter.com", "x.com", "tiktok.com",
+    "youtube.com", "linkedin.com", "pinterest.com",
+)
+
 
 def _usefulness(page: str, query: str) -> float:
     """ให้คะแนนว่าหน้านี้น่าจะมี "ข้อมูลจริง" แค่ไหน (ไม่ใช่แค่เมนู/สารบัญ).
@@ -56,14 +62,29 @@ class WebSearch:
 
     # ------------------------------------------------------------------ #
     def search(self, query: str, max_results: int | None = None) -> list[SearchResult]:
+        """ค้นหา โดยไล่ backend ตามลำดับใน cfg.backends
+
+        ddgs ใช้ backend="auto" เป็นค่าเริ่มต้น ซึ่งไล่ลองทีละตัวเลยช้ามาก (2–10 วิ)
+        ถ้าระบุ backend ตรง ๆ จะเหลือ ~0.5 วิ จึงไล่ตัวที่เร็วก่อนแล้วค่อย fallback
+        """
         from ddgs import DDGS
 
         n = max_results or self.cfg.max_results
-        try:
-            with DDGS(timeout=self.cfg.timeout_sec) as ddgs:
-                rows = list(ddgs.text(query, region=self.cfg.region, max_results=n))
-        except Exception as e:  # noqa: BLE001
-            raise SearchError(f"ค้นหาไม่สำเร็จ: {type(e).__name__}: {e}") from e
+        rows: list[dict] = []
+        last_err: Exception | None = None
+        for backend in [*self.cfg.backends, "auto"]:
+            try:
+                with DDGS(timeout=self.cfg.search_timeout_sec) as ddgs:
+                    rows = list(
+                        ddgs.text(query, region=self.cfg.region,
+                                  max_results=n, backend=backend)
+                    )
+                if rows:
+                    break
+            except Exception as e:  # noqa: BLE001 - backend ล่มบ่อย ลองตัวถัดไป
+                last_err = e
+        if not rows and last_err is not None:
+            raise SearchError(f"ค้นหาไม่สำเร็จ: {type(last_err).__name__}: {last_err}") from last_err
 
         out: list[SearchResult] = []
         for r in rows:
@@ -87,10 +108,13 @@ class WebSearch:
         import httpx
         from lxml import html as lxml_html
 
+        if any(d in url for d in _SKIP_DOMAINS):
+            return ""      # โซเชียล/หน้า JS ล้วน ดึงมาก็ได้แต่ขยะ
+
         try:
             r = httpx.get(
                 url,
-                timeout=self.cfg.timeout_sec,
+                timeout=self.cfg.page_timeout_sec,
                 follow_redirects=True,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; AI-VTuber/1.0)"},
             )
@@ -106,6 +130,32 @@ class WebSearch:
         except Exception:  # noqa: BLE001 - หน้าเว็บพังได้สารพัด ข้ามไปใช้ snippet แทน
             return ""
         return _WS_RE.sub(" ", text).strip()
+
+    # ------------------------------------------------------------------ #
+    def _fetch_many(self, targets: list[SearchResult]) -> list[str]:
+        """ดึงหลายหน้าพร้อมกัน แต่ไม่รอเกิน fetch_deadline_sec
+
+        หน้าเว็บที่ช้ามักเป็นหน้าที่ให้ข้อมูลไม่ได้อยู่แล้ว (โหลดด้วย JS, redirect วน)
+        การรอให้ครบทุกหน้าทำให้เวลารวมเท่ากับหน้าที่ช้าที่สุดเสมอ
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        if not targets:
+            return []
+        out = [""] * len(targets)
+        pool = ThreadPoolExecutor(max_workers=min(4, len(targets)))
+        futs = {pool.submit(self.fetch_page, r.url): i for i, r in enumerate(targets)}
+        try:
+            for fut in as_completed(futs, timeout=self.cfg.fetch_deadline_sec):
+                try:
+                    out[futs[fut]] = fut.result()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001 - หมดเวลา ใช้เท่าที่ได้มา
+            pass
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        return out
 
     # ------------------------------------------------------------------ #
     @staticmethod
@@ -169,9 +219,8 @@ class WebSearch:
             # ดึงหลายหน้าพร้อมกัน ไม่งั้นรอนานเกินไป
             from concurrent.futures import ThreadPoolExecutor
 
-            targets = results[:n]
-            with ThreadPoolExecutor(max_workers=min(4, len(targets))) as pool:
-                pages = list(pool.map(lambda r: self.fetch_page(r.url), targets))
+            targets = [r for r in results if not any(d in r.url for d in _SKIP_DOMAINS)][:n]
+            pages = self._fetch_many(targets)
 
             # บางหน้าที่ดึงมาเป็นเมนู/สารบัญล้วน ๆ ไม่มีข้อมูลจริง ถ้าปล่อยไว้ต้น ๆ
             # โมเดลจะไปลอกหัวข้อมาตอบ → ให้คะแนนแล้วเรียงหน้าที่มีเนื้อขึ้นก่อน

@@ -122,8 +122,13 @@ class WebConfig:
     region: str = "th-th"
     max_results: int = 5
     fetch_pages: int = 3        # ดึงเนื้อหาเต็มจากกี่หน้าแรก (0 = ใช้แค่ snippet, เร็วกว่า)
-    fetch_chars: int = 6000
-    timeout_sec: int = 20
+    fetch_chars: int = 3500
+    timeout_sec: int = 20       # (เก่า เก็บไว้เพื่อความเข้ากันได้)
+    # ddgs default คือ backend="auto" ซึ่งไล่ลองทีละตัว ช้ามาก — ระบุตรง ๆ เร็วกว่า 10 เท่า
+    backends: list[str] = field(default_factory=lambda: ["google", "brave", "duckduckgo"])
+    search_timeout_sec: int = 8
+    page_timeout_sec: int = 6    # หน้าที่ช้ากว่านี้มักไม่มีข้อมูลอยู่ดี
+    fetch_deadline_sec: int = 8  # รอทุกหน้ารวมกันไม่เกินนี้ แล้วใช้เท่าที่ได้
     trigger_phrases: list[str] = field(
         default_factory=lambda: ["ค้นหา", "เสิร์ช", "หาข้อมูล", "กูเกิล", "/search"]
     )
