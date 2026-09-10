@@ -112,6 +112,18 @@ web:
     - "กูเกิล"
     - "/search"
 
+  # อากาศ — ใช้ Open-Meteo (JSON API ตรง, เร็ว, ไม่ผ่าน LLM เลยไม่มีทางหลอน)
+  # แยกจาก trigger_phrases ข้างบน เพราะเว็บพยากรณ์อากาศส่วนใหญ่ render ด้วย
+  # JavaScript ดึงเนื้อหาไม่ได้ — ค้นเว็บทั่วไปเลยตอบไม่ได้เรื่อง
+  weather_trigger_phrases:
+    - "อากาศ"
+    - "อุณหภูมิ"
+    - "ฝนตกไหม"
+    - "ฝนจะตกไหม"
+    - "พยากรณ์อากาศ"
+    - "/weather"
+  default_location: "กรุงเทพมหานคร"   # ใช้เมื่อไม่ได้ระบุสถานที่
+
 coding:
   # โฟลเดอร์เริ่มต้นที่ Claude Code จะเข้าไปทำงาน (เปลี่ยนได้ด้วย /project <path>)
   default_project: "./workspace"

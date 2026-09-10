@@ -17,6 +17,7 @@ from src.llm.persona import build_search_system_prompt, build_system_prompt
 from src.llm.router import Router
 from src.tts.manager import ENGINES, TTSManager
 from src.web.search import SEARCH_PROMPT, SearchError, WebSearch
+from src.web.weather import WeatherClient, WeatherError
 
 
 def _now_th() -> str:
@@ -33,6 +34,7 @@ HELP = """[bold]คำสั่ง[/]
   /say <ข้อความ>     ให้พูดข้อความนี้ทันที (ทดสอบเสียง + ปาก)
   /voice [ชื่อ]        สลับเสียง (piper/edge/mms/f5) — ไม่ใส่ชื่อ = ดูรายการ
   /emotion [ชื่อ]     เปลี่ยนสีหน้า (happy/sad/excited/...) — ไม่ใส่ = ดูรายการ
+  /weather [สถานที่] เช็กอากาศ (ไม่ใส่ = กรุงเทพฯ)
   /search <คำค้น>    ค้นข้อมูลจากเว็บแล้วสรุปให้ฟัง
   /web on|off        เปิด/ปิดการค้นเว็บ
   /project <path>    ตั้งโฟลเดอร์โปรเจกต์ให้ Claude Code
@@ -48,8 +50,11 @@ class VTuberApp:
         self.cfg = cfg
         self.console = Console()
         self.llm = LLMClient(cfg.llm)
-        self.router = Router(cfg.coding.trigger_phrases, cfg.web.trigger_phrases)
+        self.router = Router(
+            cfg.coding.trigger_phrases, cfg.web.trigger_phrases, cfg.web.weather_trigger_phrases
+        )
         self.web = WebSearch(cfg.web)
+        self.weather = WeatherClient(cfg.web)
         self.tts = TTSManager(cfg)
         self.system_prompt = build_system_prompt(cfg.persona)
         self.history: list[dict[str, str]] = []
@@ -141,6 +146,20 @@ class VTuberApp:
             c.print(f"[dim]ค่าใช้จ่าย ~${res.cost_usd:.4f}[/]")
         await self._speak(res.summary)
 
+    async def _weather_and_speak(self, place: str) -> None:
+        c = self.console
+        loc = place.strip() or self.cfg.web.default_location
+        c.print(f"[cyan]☁️  เช็กอากาศ:[/] {loc}")
+        try:
+            rep = await asyncio.to_thread(self.weather.report, loc)
+        except WeatherError as e:
+            c.print(f"[red]{e}[/]")
+            await self._speak(f"หาอากาศของ{loc}ไม่เจอเลยค่ะ", emotion="sad")
+            return
+        text = rep.as_speech()
+        c.print(f"[bold magenta]{self.cfg.persona.name}›[/] {text}")
+        await self._speak(text, emotion=rep.emotion)
+
     async def _search_and_answer(self, query: str) -> None:
         """ค้นเว็บ → ให้ LLM สรุปเป็นไทยสั้น ๆ → พูด."""
         c = self.console
@@ -198,6 +217,9 @@ class VTuberApp:
             return True
         if pre.mode == "search":
             await self._search_and_answer(pre.task)
+            return True
+        if pre.mode == "weather":
+            await self._weather_and_speak(pre.task)
             return True
 
         self.history.append({"role": "user", "content": line})
@@ -276,6 +298,8 @@ class VTuberApp:
                 c.print("[bold]อารมณ์ที่เลือกได้:[/]")
                 for e in EMOTIONS:
                     c.print(f"  {'[green]●[/]' if e == cur else ' '} /emotion {e}")
+        elif cmd == "/weather":
+            await self._weather_and_speak(arg)
         elif cmd == "/search":
             if arg:
                 await self._search_and_answer(arg)

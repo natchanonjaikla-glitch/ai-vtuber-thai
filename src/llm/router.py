@@ -30,9 +30,15 @@ class RouteResult:
 
 
 class Router:
-    def __init__(self, code_triggers: list[str], search_triggers: list[str] | None = None):
+    def __init__(
+        self,
+        code_triggers: list[str],
+        search_triggers: list[str] | None = None,
+        weather_triggers: list[str] | None = None,
+    ):
         self.code_triggers = [t.strip().lower() for t in code_triggers if t.strip()]
         self.search_triggers = [t.strip().lower() for t in (search_triggers or []) if t.strip()]
+        self.weather_triggers = [t.strip().lower() for t in (weather_triggers or []) if t.strip()]
 
     # ---------------------------------------------------------------- #
     @staticmethod
@@ -47,6 +53,10 @@ class Router:
             if trig in low:
                 task = self._strip_trigger(user_text, trig)
                 return RouteResult("delegate_code", task or user_text.strip())
+        for trig in self.weather_triggers:
+            if trig in low:
+                loc = self._strip_trigger(user_text, trig)
+                return RouteResult("weather", loc)
         for trig in self.search_triggers:
             if trig in low:
                 q = self._strip_trigger(user_text, trig)

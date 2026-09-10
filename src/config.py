@@ -132,6 +132,12 @@ class WebConfig:
     trigger_phrases: list[str] = field(
         default_factory=lambda: ["ค้นหา", "เสิร์ช", "หาข้อมูล", "กูเกิล", "/search"]
     )
+    weather_trigger_phrases: list[str] = field(
+        default_factory=lambda: [
+            "อากาศ", "อุณหภูมิ", "ฝนตกไหม", "ฝนจะตกไหม", "พยากรณ์อากาศ", "/weather",
+        ]
+    )
+    default_location: str = "กรุงเทพมหานคร"
 
 
 @dataclass
